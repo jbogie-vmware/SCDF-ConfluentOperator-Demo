@@ -4,10 +4,10 @@ A Spring Cloud Data Flow demo on Kubernetes with Kafka provided by the Confluent
 
 ## Environment Requirements
 
-### TKGI or TKG  
+### VMware Tanzu Kubernetes Grid 
 
 **TKGI:**  
-To demo the full stack refer to this repo to setup a Confluent Operator environment running on TKGI [jbogie-vmware/tkgi-confluent-operator](https://github.com/jbogie-vmware/tkgi-confluent-operator).
+To demo the full stack refer to this repo to setup a Confluent Operator environment running on TKGI [jbogie-vmware/tkgi-confluent-operator](https://github.com/jbogie-vmware/tkgi-confluent-operator).  
 
 **TKG:**  
 COMING SOON
@@ -18,12 +18,12 @@ To walkthrough SCDF's streaming, batch, analytics, and observability features, t
 
 1. Spring Cloud Data Flow
 2. Spring Cloud Skipper
-3. Prometheus
-4. Grafana
-5. Apache Kafka
+3. Confluent Operator
+4. Prometheus
+5. Grafana
 6. MariaDB 
 
-## Demo Applications
+### Demo Applications
 
 1. [`trucks`](https://github.com/jbogie-vmware/SCDF-ConfluentOperator-Demo/tree/master/thumbinator) — generates trucks in random interval
 2. [`brake-temperture`](https://github.com/jbogie-vmware/SCDF-ConfluentOperator-Demo/tree/master/brake-temperature) — computes moving average of truck's brake temperature in 10s interval
@@ -31,100 +31,36 @@ To walkthrough SCDF's streaming, batch, analytics, and observability features, t
 4. [`thumbinator`](https://github.com/jbogie-vmware/SCDF-ConfluentOperator-Demo/tree/master/thumbinator) — a task/batch-job that can create thumbnails from images
 
 
-The demo on the Spring Cloud Data Flow's [Bitnami chart](https://github.com/bitnami/charts/tree/master/bitnami/spring-cloud-dataflow). Students will have to run the `scripts/deploy-scdf.sh` script that is available at [jbogie-vmware/SCDF-ConfluentOperator-Demo](https://github.com/jbogie-vmware/SCDF-ConfluentOperator-Demo).
+The demo relies on the Spring Cloud Data Flow's [Bitnami chart](https://github.com/bitnami/charts/tree/master/bitnami/spring-cloud-dataflow). Students will have to run the `scripts/deploy-scdf.sh` script that is available at [jbogie-vmware/SCDF-ConfluentOperator-Demo](https://github.com/jbogie-vmware/SCDF-ConfluentOperator-Demo).  
 
-## Agenda
+## Demo
+To get started with the demo, first, you will have to prepare the environment.
 
-```sequence
-Strigo->Lab: Start the Lab in Strigo
+> Test your environment by running the `scripts/test-env.sh` script — see example below.
 
-Note left of Prepare: You'll do this *once*
-Lab->Prepare: Start minikube
-Lab->Prepare: Deploy SCDF stack
-Lab->Prepare: Build applications
-Lab->Prepare: Generate docker images
-
-Prepare-->Lab: Stuck? Cleanup and repeat
-
-Prepare->Streaming Lab: Build an IoT streaming data pipeline
-Prepare->Streaming Lab: Deploy a stream from SCDF to K8s; verify results
-Prepare->Streaming Lab: Monitor performance using Prometheus & Grafana
-
-Streaming Lab-->Prepare: Stuck? Cleanup and repeat; ask questions
-
-Prepare->Batch Lab: Build and design a batch data pipeline
-Prepare->Batch Lab: Launch the batch-job from SCDF to K8s; verify results
-Prepare->Batch Lab: Schedule the batch-job in SCDF to K8s; verify results
-Prepare->Batch Lab: Monitor performance using Prometheus & Grafana
-
-Batch Lab-->Prepare: Stuck? Cleanup and repeat; ask questions
-
-```
-
-## Labs
-To get started with the labs, first, you will have to prepare the environment.
-
-When you log in to Strigo with your access token, you will have to click the "My Lab" button on the left-nav to prepare the lab VM.
-
-![My Lab](https://i.imgur.com/kglWS7X.png)
-
-> After you login to the VM, test the environment by running the `scripts/test-env.sh` script — see example below.
-
-```bash
-[ec2-user@ip ]$ cd SpringOne2020
-[ec2-user@ip SpringOne2020]$ sh scripts/test-env.sh 
-docker is ready
-minikube is ready
+```zsh
+❯ ./test-env.sh
 helm is ready
-kubectl is ready
+kubectl is not ready
 k9s is ready
 java is ready
 mvn is ready
 ```
 
-### Lab 1: Prepare Environment
-The first lab starts with setting up a single-node Kubernetes cluster using Minikube. Let's review the steps involved.
+### Demo Step 1: Prepare Environment
+Log into your TKG cluster and ensure you have the proper context selected with `kubectl`.  
 
-#### Set up Kubernetes
-Start a single-node Minikube cluster with the `minikube start --vm-driver=docker --kubernetes-version v1.17.0 --memory=10240 --cpus=4` command.
+```zsh
+❯ tkgi login -a api.pks.foo.bar.com -u admin -k
 
+Password: ********************************
+API Endpoint: api.pks.foo.bar.com
+User: admin
+Login successful.
+
+❯ kctx
+cotkgi
 ```
-[ec2-user@ip-100 ~]$ minikube start --vm-driver=docker --kubernetes-version v1.17.0 --memory=10240 --cpus=4
-
-* minikube v1.12.2 on Amazon 2 (xen/amd64)
-* Using the docker driver based on user configuration
-* Starting control plane node minikube in cluster minikube
-* minikube 1.12.3 is available! Download it: https://github.com/kubernetes/minikube/releases/tag/v1.12.3
-* To disable this notice, run: 'minikube config set WantUpdateNotification false'
-* Creating docker container (CPUs=4, Memory=10240MB) ...
-* Preparing Kubernetes v1.17.0 on Docker 19.03.8 ...
-* Verifying Kubernetes components...
-* Enabled addons: default-storageclass, storage-provisioner
-* Done! kubectl is now configured to use "minikube"
-```
-
-> We are using the Docker driver to install Kubernetes into an existing Docker daemon in the VM. This also simplifies the setup because we don't need to worry about extra virtualization to be enabled.
-
-Verify that Minikube is successfully started: `minikube status`.
-```
-ec2-user@ip-100 ~]$ minikube status
-
-minikube
-type: Control Plane
-host: Running
-kubelet: Running
-apiserver: Runningkubeconfig: Configured
-```
-Confirm that the Minikube container is running.
-```
-[ec2-user@ip-100 ~]$ docker ps
-CONTAINER ID        IMAGE                                 COMMAND                  CREATED             STATUS              PORTS                                                     
-                                                 NAMES
-539c113531ae        gcr.io/k8s-minikube/kicbase:v0.0.11   "/usr/local/bin/entr…"   9 minutes ago       Up 9 minutes        127.0.0.1:32771->22/tcp, 127.0.0.1:32770->2376/tcp, 127.0.
-0.1:32769->5000/tcp, 127.0.0.1:32768->8443/tcp   minikube
-```
-
-This command roughly takes about 2-3mins to complete. If for any reason, you notice startup errors, likely, the Docker daemon is still starting in the VM, so re-run the same start command once again. The cluster will start eventually.
 
 #### Set up Spring Cloud Data Flow
 It is now time to deploy SCDF! To get started, you will run the `scripts/deploy-scdf.sh` script.
